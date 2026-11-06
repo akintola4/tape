@@ -2,8 +2,9 @@
 //  ConverterView.swift
 //  Tape
 //
-//  The one screen. Type a number, pick its unit, and every other unit in the
-//  category is listed below. Tap a row to copy it.
+//  The one screen. Type a number and pick its unit; a drawing pictures it,
+//  and every other unit in the category is listed below, most useful first.
+//  Tap a row to copy it.
 //
 
 import SwiftUI
@@ -24,6 +25,8 @@ struct ConverterView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @ScaledMetric(relativeTo: .largeTitle) private var amountSize: CGFloat = 48
+    /// Wide enough for "US gal", so every value ends at the same x.
+    @ScaledMetric(relativeTo: .subheadline) private var symbolSlot: CGFloat = 50
 
     init(settings: AppSettings, defaults: UserDefaults = .standard) {
         self.settings = settings
@@ -43,14 +46,18 @@ struct ConverterView: View {
         UnitsLogic.rows(for: amount, from: unit, plot: settings.plot, preference: settings.decimals)
     }
 
+    private var picture: Picture {
+        PictureLogic.picture(for: amount, unit: unit, plot: settings.plot)
+    }
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Tokens.Spacing.lg) {
+            VStack(alignment: .leading, spacing: Tokens.Spacing.md) {
                 header
                 categoryChips
                 inputCard
+                card { PictureCard(picture: picture) }
                 resultsCard
-                if category == .area { plotNote }
             }
             .padding(.horizontal, Tokens.Spacing.lg)
             .padding(.top, Tokens.Spacing.sm)
@@ -58,6 +65,7 @@ struct ConverterView: View {
             .frame(maxWidth: 560)
             .frame(maxWidth: .infinity)
         }
+        .background(Theme.screenBackground)
         .scrollDismissesKeyboard(.interactively)
         .overlay(alignment: .bottom) { toastView }
         .toolbar {
@@ -85,6 +93,16 @@ struct ConverterView: View {
                 toast = Toast(text: first.copyText, sticky: true)
             }
         }
+        .task {
+            guard let keys = LaunchOptions.demoTyping else { return }
+            try? await Task.sleep(for: .seconds(2.5))
+            amountFocused = true
+            amountText = ""
+            for key in keys {
+                try? await Task.sleep(for: .milliseconds(700))
+                if key == "<" { amountText = String(amountText.dropLast()) } else { amountText.append(key) }
+            }
+        }
         .sheet(isPresented: $showSettings) {
             SettingsView(settings: settings)
         }
@@ -103,11 +121,12 @@ struct ConverterView: View {
             } label: {
                 Image(systemName: "gearshape")
                     .font(.title3)
-                    .frame(minWidth: Tokens.Layout.minTapTarget, minHeight: Tokens.Layout.minTapTarget)
+                    .foregroundStyle(.primary)
+                    .frame(width: Tokens.Layout.minTapTarget, height: Tokens.Layout.minTapTarget)
+                    .background(Color(.secondarySystemFill), in: .circle)
+                    .contentShape(.circle)
             }
-            .buttonStyle(.glass)
-            .buttonBorderShape(.circle)
-            .tint(.primary)
+            .buttonStyle(PressStyle())
             .accessibilityLabel("Settings")
         }
     }
@@ -117,11 +136,9 @@ struct ConverterView: View {
     private var categoryChips: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal) {
-                GlassEffectContainer(spacing: Tokens.Spacing.sm) {
-                    HStack(spacing: Tokens.Spacing.sm) {
-                        ForEach(UnitCategory.allCases) { item in
-                            chip(item).id(item)
-                        }
+                HStack(spacing: Tokens.Spacing.sm) {
+                    ForEach(UnitCategory.allCases) { item in
+                        chip(item).id(item)
                     }
                 }
             }
@@ -147,14 +164,11 @@ struct ConverterView: View {
                 .foregroundStyle(selected ? Theme.chipText : .primary)
                 .padding(.horizontal, Tokens.Spacing.lg)
                 .frame(minHeight: Tokens.Layout.minTapTarget - Tokens.Spacing.sm)
-                .background {
-                    if selected { Capsule().fill(Theme.chipFill) }
-                }
-                .glassEffect(selected ? .identity : .regular.interactive(), in: .capsule)
+                .background(selected ? Theme.chipFill : Color(.secondarySystemFill), in: .capsule)
                 .frame(minHeight: Tokens.Layout.minTapTarget)
                 .contentShape(.capsule)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressStyle())
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
@@ -162,46 +176,32 @@ struct ConverterView: View {
 
     private var inputCard: some View {
         card {
-            VStack(alignment: .leading, spacing: Tokens.Spacing.md) {
-                HStack(spacing: Tokens.Spacing.md) {
-                    unitMenu
-                    Text(unitCaption)
-                        .font(Tokens.Typography.text(.subheadline))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .accessibilityHidden(true)
-                }
-                HStack(alignment: .center, spacing: Tokens.Spacing.md) {
-                    TextField("0", text: $amountText)
-                        .font(Theme.amount(size: amountSize))
-                        .keyboardType(.decimalPad)
-                        .focused($amountFocused)
-                        .lineLimit(1)
-                        .accessibilityLabel("Amount in \(unit.name.lowercased())")
-                    if category.allowsNegative {
-                        Button {
-                            amountText = UnitsLogic.toggleSign(amountText)
-                        } label: {
-                            Image(systemName: "plus.forwardslash.minus")
-                                .font(.title3.weight(.semibold))
-                                .frame(width: Tokens.Layout.minTapTarget, height: Tokens.Layout.minTapTarget)
-                        }
-                        .buttonStyle(.glass)
-                        .buttonBorderShape(.circle)
-                        .tint(.primary)
-                        .accessibilityLabel("Make negative or positive")
+            HStack(alignment: .center, spacing: Tokens.Spacing.md) {
+                TextField("0", text: $amountText)
+                    .font(Theme.amount(size: amountSize))
+                    .keyboardType(.decimalPad)
+                    .focused($amountFocused)
+                    .lineLimit(1)
+                    .accessibilityLabel("Amount in \(unit.name.lowercased())")
+                if category.allowsNegative {
+                    Button {
+                        amountText = UnitsLogic.toggleSign(amountText)
+                    } label: {
+                        Image(systemName: "plus.forwardslash.minus")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .frame(width: Tokens.Layout.minTapTarget, height: Tokens.Layout.minTapTarget)
+                            .background(Color(.secondarySystemFill), in: .circle)
+                            .contentShape(.circle)
                     }
+                    .buttonStyle(PressStyle())
+                    .accessibilityLabel("Make negative or positive")
                 }
+                unitMenu
             }
         }
         .contentShape(.rect)
         .onTapGesture { amountFocused = true }
-    }
-
-    /// "Square metres", or "Plots · 60 × 120 ft" so the plot's size is never a guess.
-    private var unitCaption: String {
-        unit.id == "plot" ? "Plots · \(UnitsLogic.plotDimensions(settings.plot))" : unit.name
     }
 
     private var unitMenu: some View {
@@ -222,7 +222,7 @@ struct ConverterView: View {
             }
             .padding(.horizontal, Tokens.Spacing.md + Tokens.Spacing.xs)
             .frame(minHeight: Tokens.Layout.minTapTarget)
-            .background(.fill.tertiary, in: Capsule())
+            .background(Color(.secondarySystemFill), in: Capsule())
             .contentShape(Capsule())
         }
         .tint(.primary)
@@ -237,49 +237,49 @@ struct ConverterView: View {
     // MARK: Results
 
     private var resultsCard: some View {
-        let rows = rows
-        let symbolSlots = Array(Set(rows.map(\.symbol))).sorted()
-        return VStack(spacing: 0) {
+        VStack(spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                if index > 0 {
-                    Divider().padding(.leading, Tokens.Spacing.lg)
-                }
-                resultRow(row, symbolSlots: symbolSlots)
+                if index > 0 { Divider() }
+                resultRow(row)
             }
         }
-        .padding(.vertical, Tokens.Spacing.xs)
-        .background(Color(.secondarySystemBackground))
+        .background(Theme.cardBackground)
         .clipShape(.rect(cornerRadius: Tokens.Radius.lg))
     }
 
-    /// `symbolSlots` holds every symbol on screen, so each row's symbol column is
-    /// as wide as the widest and the numbers line up on their right edge.
-    private func resultRow(_ row: ResultRow, symbolSlots: [String]) -> some View {
+    /// Name on the left; the value right-aligned against a fixed-width symbol
+    /// slot, so every value ends at the same x whether the unit is "m²" or "plots".
+    private func resultRow(_ row: ResultRow) -> some View {
         Button {
             copy(row)
         } label: {
-            ListRow(title: row.name) {
-                EmptyView()
-            } trailing: {
-                HStack(alignment: .firstTextBaseline, spacing: Tokens.Spacing.xs + Tokens.Spacing.xxs) {
-                    Text(row.value)
-                        .font(Tokens.Typography.tabular(.body).weight(.semibold))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                        .contentTransition(reduceMotion ? .identity : .numericText())
-                    ZStack(alignment: .leading) {
-                        ForEach(symbolSlots, id: \.self) { Text($0).hidden() }
-                        Text(row.symbol)
-                    }
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                Text(row.name)
+                    .font(Tokens.Typography.text(.body))
+                    .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text(row.value)
+                    .font(Tokens.Typography.tabular(.body).weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .contentTransition(reduceMotion ? .identity : .numericText())
+                Text(row.symbol)
                     .font(Tokens.Typography.text(.subheadline))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .padding(.leading, Tokens.Spacing.sm)
+                    .frame(width: symbolSlot, alignment: .leading)
                     .accessibilityHidden(true)
-                }
             }
             .padding(.horizontal, Tokens.Spacing.lg)
+            .padding(.vertical, Tokens.Spacing.md)
+            .frame(minHeight: Tokens.Layout.minTapTarget)
+            .contentShape(.rect)
         }
         .buttonStyle(RowPressStyle())
+        .accessibilityElement(children: .combine)
         .accessibilityLabel("\(row.name), \(row.copyText)")
         .accessibilityHint("Copies the value")
         .contextMenu {
@@ -288,18 +288,6 @@ struct ConverterView: View {
                 Button("Type in \(target.name.lowercased())", systemImage: "arrow.up") { use(target) }
             }
         }
-    }
-
-    // MARK: Plot note
-
-    private var plotNote: some View {
-        Button {
-            showSettings = true
-        } label: {
-            Badge(text: "1 plot = \(UnitsLogic.plotSummary(settings.plot))", tone: .accent, systemImage: "square.dashed")
-        }
-        .buttonStyle(.plain)
-        .accessibilityHint("Opens settings to change the plot size")
     }
 
     // MARK: Toast
@@ -397,7 +385,7 @@ struct ConverterView: View {
             .padding(.horizontal, Tokens.Spacing.lg)
             .padding(.vertical, Tokens.Spacing.lg)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: Tokens.Radius.lg))
+            .background(Theme.cardBackground, in: .rect(cornerRadius: Tokens.Radius.lg))
     }
 }
 
@@ -405,6 +393,17 @@ private struct Toast: Equatable {
     let id = UUID()
     let text: String
     var sticky = false
+}
+
+/// The 0.96 press for the gear, the chips and the sign key.
+private struct PressStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.96 : 1)
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+    }
 }
 
 /// A row that darkens while pressed, like a table cell. No scale: rows are
