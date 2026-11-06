@@ -14,9 +14,10 @@ struct TapeApp: App {
     /// Once per cold launch. Coming back from the background skips it.
     @State private var showSplash = !LaunchOptions.skipSplash
     @State private var splashStart: Date?
+    /// Set inside the tap's fade, so the app settles to full size with it.
+    @State private var splashSkipped = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private let splashTimeline = SplashLogic.Timeline(variant: LaunchOptions.splashVariant)
-        .slowed(by: LaunchOptions.splashSlowdown)
+    private let splashTimeline = SplashLogic.Timeline().slowed(by: LaunchOptions.splashSlowdown)
 
     var body: some Scene {
         WindowGroup {
@@ -29,7 +30,9 @@ struct TapeApp: App {
                     SplashOverlay(
                         haptics: settings.haptics,
                         timeline: splashTimeline,
+                        frozenAt: LaunchOptions.splashFrozenAt,
                         onStart: { splashStart = $0 },
+                        onSkip: { splashSkipped = true },
                         onFinish: { showSplash = false }
                     )
                 }
@@ -38,8 +41,8 @@ struct TapeApp: App {
     }
 
     private func appScale(at date: Date) -> CGFloat {
-        guard showSplash, !reduceMotion else { return 1 }
-        let t = splashStart.map { date.timeIntervalSince($0) } ?? 0
+        guard showSplash, !splashSkipped, !reduceMotion else { return 1 }
+        let t = LaunchOptions.splashFrozenAt ?? splashStart.map { date.timeIntervalSince($0) } ?? 0
         return SplashLogic.appScale(at: t, in: splashTimeline)
     }
 }
@@ -71,11 +74,9 @@ enum LaunchOptions {
     /// `-TapeSplashSlow`: play the opening animation 4× slower, for tuning it.
     static var splashSlowdown: Double { flag("-TapeSplashSlow") ? 4 : 1 }
 
-    /// `-TapeSplash pull|wipe|reel`: which opening animation to play while
-    /// one is being chosen. Pull when absent.
-    static var splashVariant: SplashLogic.Variant {
-        value(after: "-TapeSplash").flatMap(SplashLogic.Variant.init(rawValue:)) ?? .pull
-    }
+    /// `-TapeSplashAt 0.6`: hold the opening animation at this many seconds
+    /// in, for stills. It never moves on to the app.
+    static var splashFrozenAt: Double? { value(after: "-TapeSplashAt").flatMap(Double.init) }
 
     private static func flag(_ name: String) -> Bool {
         #if DEBUG

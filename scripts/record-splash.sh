@@ -1,12 +1,15 @@
 #!/bin/zsh
 # Records the opening animation in the simulator so you can watch it on the Mac.
 #
-#   scripts/record-splash.sh                     build, then record pull at normal speed and 4x slow motion
-#   scripts/record-splash.sh pull wipe reel      the same for each variant named
-#   scripts/record-splash.sh --no-build wipe     record the build that's already there
+#   scripts/record-splash.sh                 build, then record at normal speed and 4x slow motion
+#   scripts/record-splash.sh --no-build      record the build that's already there
+#   scripts/record-splash.sh final           name the round: <time>-pull-final-normal.mp4
 #
-# Videos land in ~/Movies/Tape splash/ as <time>-<variant>-normal.mp4 and
-# -slow-4x.mp4; the normal-speed ones open in QuickTime. The first second or
+# SIM=<udid> picks a simulator other than the first iPhone 17 Pro, e.g. a fresh
+# one when iOS keeps showing an old launch screen after the image changed.
+#
+# Videos land in ~/Movies/Tape splash/ as <time>-pull[-name]-normal.mp4 and
+# -slow-4x.mp4; the normal-speed one opens in QuickTime. The first second or
 # so of each is the debug build launching, not the animation.
 set -euo pipefail
 
@@ -19,10 +22,9 @@ mkdir -p "$OUT"
 
 BUILD=1
 if [[ "${1:-}" == "--no-build" ]]; then BUILD=0; shift; fi
-VARIANTS=("$@")
-(( ${#VARIANTS} )) || VARIANTS=(pull)
+NAME=pull${1:+-$1}
 
-SIM=$(xcrun simctl list devices available | grep -E "^ +$SIM_NAME \(" | head -1 | grep -oE '[0-9A-F-]{36}')
+SIM=${SIM:-$(xcrun simctl list devices available | grep -E "^ +$SIM_NAME \(" | head -1 | grep -oE '[0-9A-F-]{36}')}
 xcrun simctl boot "$SIM" 2>/dev/null || true
 
 if (( BUILD )); then
@@ -49,9 +51,6 @@ record() { # name, seconds, launch args...
   echo "$file"
 }
 
-NORMAL=()
-for variant in $VARIANTS; do
-  NORMAL+=("$(record "$variant-normal" 5 -TapeSplash "$variant")")
-  record "$variant-slow-4x" 12 -TapeSplash "$variant" -TapeSplashSlow
-done
-[[ -n "${NO_OPEN:-}" ]] || open -a "QuickTime Player" "${NORMAL[@]}"
+NORMAL=$(record "$NAME-normal" 5)
+record "$NAME-slow-4x" 12 -TapeSplashSlow
+[[ -n "${NO_OPEN:-}" ]] || open -a "QuickTime Player" "$NORMAL"

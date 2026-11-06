@@ -2,10 +2,10 @@
 //  SplashLogicTests.swift
 //  TapeTests
 //
-//  The opening animation's timeline in all three variants: phases in order,
-//  inside the time budget, the blade home before the dive, the ticker on
-//  "plot", the app at full size at the end, and a mark the same size as the
-//  launch screen image.
+//  The opening animation's timeline: phases in order and inside the time
+//  budget, the curves easing the right way, the counter's readings, the blade
+//  at rest before the dive, the app at full size at the end, and a mark the
+//  same size and shape as the launch screen image.
 //
 
 import Testing
@@ -14,13 +14,19 @@ import SwiftUI
 @testable import Tape
 
 private let screen = CGSize(width: 402, height: 874)   // iPhone 17 Pro
+private let timeline = SplashLogic.Timeline()
 
 private func close(_ a: CGFloat, _ b: CGFloat, within tolerance: CGFloat = 1e-6) -> Bool {
     abs(a - b) <= tolerance
 }
 
-private func timeline(_ variant: SplashLogic.Variant) -> SplashLogic.Timeline {
-    SplashLogic.Timeline(variant: variant)
+private func reach(at t: Double) -> CGFloat {
+    SplashLogic.bladeReach(at: t, in: timeline, screen: screen)
+}
+
+/// Samples `f` at `count` + 1 evenly spaced times from `start` to `end`.
+private func samples(from start: Double, to end: Double, count: Int = 200, _ f: (Double) -> CGFloat) -> [CGFloat] {
+    (0...count).map { f(start + (end - start) * Double($0) / Double(count)) }
 }
 
 struct SplashLogicTests {
@@ -45,181 +51,211 @@ struct SplashLogicTests {
         #expect(viewBox == [0, 0, Double(TapeMark.gridSize.width), Double(TapeMark.gridSize.height)])
         #expect(close(SplashLogic.markSize.height / SplashLogic.markSize.width,
                       TapeMark.gridSize.height / TapeMark.gridSize.width))
+
+        // The same rectangles as the shapes the splash draws at rest.
+        let rects = try svg.matches(of: Regex(#"<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)""#))
+            .map { match in (1...4).compactMap { match.output[$0].substring.flatMap { Double($0) } } }
+        let blade = [TapeMark.bladeLeft, TapeMark.bladeTop, TapeMark.bladeRestRight - TapeMark.bladeLeft, TapeMark.caseSide - TapeMark.bladeTop]
+        let hook = [TapeMark.hookLeft, TapeMark.hookTop, TapeMark.gridSize.width - TapeMark.hookLeft, TapeMark.caseSide - TapeMark.hookTop]
+        let ticks = TapeMark.visibleTicks(reach: 0).map { [$0.minX, $0.minY, $0.width, $0.height] }
+        for shape in [blade, hook] + ticks {
+            #expect(rects.contains(shape.map { Double($0) }))
+        }
     }
 
     @Test func restingBladeShowsTheIconsTwoTicks() {
-        let ticks = TapeMark.ticks(reach: 0)
-        #expect(ticks.map(\.minX) == [484, 514])
-        #expect(ticks.map(\.height) == [52, 30])
+        let ticks = TapeMark.visibleTicks(reach: 0)
+        #expect(ticks.map(\.minX) == TapeMark.restTicks)
+        #expect(ticks.map(\.height) == [TapeMark.longTick, TapeMark.shortTick])
         // Pulled out, more come out from under the case and none sit over it.
-        let pulled = TapeMark.ticks(reach: 400)
+        let pulled = TapeMark.visibleTicks(reach: 400)
         #expect(pulled.count > ticks.count)
         #expect(pulled.allSatisfy { $0.minX >= TapeMark.tickClipX && $0.width > 0 })
+        // The same spacing as at rest, and always a long one every fourth.
+        let whole = pulled.filter { $0.width == TapeMark.tickWidth }
+        #expect(zip(whole, whole.dropFirst()).allSatisfy { $1.minX - $0.minX == TapeMark.tickStep })
+        let longs = whole.filter { $0.height == TapeMark.longTick }.map(\.minX)
+        #expect(zip(longs, longs.dropFirst()).allSatisfy { $1 - $0 == 4 * TapeMark.tickStep })
     }
 
-    @Test func variantDefaultsToPull() {
-        #expect(SplashLogic.Timeline().variant == .pull)
-        #expect(SplashLogic.Variant(rawValue: "wipe") == .wipe)
-        #expect(SplashLogic.Variant(rawValue: "nope") == nil)
+    /// One grid unit is 0.7 px at 3×, so straight edges on multiples of 10
+    /// units land on whole pixels and render sharp.
+    @Test func straightEdgesLandOnWholePixels() {
+        let pixelsPerUnit = SplashLogic.pointsPerUnit * 3
+        let edges = [TapeMark.bladeLeft, TapeMark.bladeTop, TapeMark.hookLeft, TapeMark.hookTop,
+                     TapeMark.caseSide, TapeMark.tickClipX, TapeMark.tickWidth, TapeMark.tickStep,
+                     TapeMark.longTick, TapeMark.shortTick] + TapeMark.restTicks
+        for edge in edges {
+            #expect(close(edge * pixelsPerUnit, (edge * pixelsPerUnit).rounded(), within: 1e-9), "\(edge)")
+        }
+        // The mark itself sits on whole pixels when centred on a 3× iPhone.
+        for height in [874.0, 844.0, 932.0, 956.0] {
+            let top = (height - SplashLogic.markSize.height) / 2 * 3
+            #expect(close(top, top.rounded(), within: 1e-6))
+        }
+    }
+
+    @Test func movingTapeSnapsToWholePixels() {
+        #expect(SplashLogic.snapped(10.2, scale: 3) == 31.0 / 3)
+        #expect(SplashLogic.snapped(-1.4, scale: 3) == -4.0 / 3)
+        #expect(SplashLogic.snapped(5.25, scale: 2) == 5.5)
+        #expect(SplashLogic.snapped(5.25, scale: 0) == 5.25)
     }
 
     // MARK: - Timing
 
-    @Test(arguments: SplashLogic.Variant.allCases)
-    func totalIsInsideTheBudget(_ variant: SplashLogic.Variant) {
-        let t = timeline(variant)
-        #expect(t.total >= 1.6 && t.total <= 2.2)
-        #expect(t.exitStarts > 0 && t.exitStarts < t.total)
-        #expect(t.hapticTimes.allSatisfy { $0 > 0 && $0 <= t.exitStarts })
+    @Test func totalIsInsideTheBudget() {
+        #expect(timeline.total >= 1.6 && timeline.total <= 2)
+        #expect(close(timeline.total, 1.68))
     }
 
-    @Test(arguments: SplashLogic.Variant.allCases)
-    func slowMotionStretchesEveryPhase(_ variant: SplashLogic.Variant) {
-        let normal = timeline(variant)
-        let slow = normal.slowed(by: 4)
-        #expect(abs(slow.total - normal.total * 4) < 1e-9)
-        #expect(abs(slow.exitStarts - normal.exitStarts * 4) < 1e-9)
-        #expect(slow.variant == variant)
+    @Test func phasesRunInOrder() {
+        #expect(timeline.pull < timeline.snapStarts)
+        #expect(timeline.snapStarts < timeline.snapEnds)
+        #expect(timeline.snapEnds < timeline.diveStarts)
+        #expect(timeline.diveStarts < timeline.total)
     }
 
-    @Test func pullPhasesRunInOrder() {
-        let t = timeline(.pull)
-        #expect(t.pull < t.snapStarts)
-        #expect(t.snapStarts < t.snapEnds)
-        #expect(t.snapEnds < t.exitStarts)
-        #expect(t.hapticTimes == [t.snapEnds])
+    @Test func slowMotionStretchesEveryPhase() {
+        let slow = timeline.slowed(by: 4)
+        #expect(abs(slow.total - timeline.total * 4) < 1e-9)
+        #expect(abs(slow.snapEnds - timeline.snapEnds * 4) < 1e-9)
+        #expect(abs(slow.diveStarts - timeline.diveStarts * 4) < 1e-9)
     }
 
-    // MARK: - Pull
+    // MARK: - The pull
 
     @Test func pullCatchesAtTheScreenEdgeAndHolds() {
-        let t = timeline(.pull)
         let full = SplashLogic.pullReach(screen: screen)
-        #expect(close(SplashLogic.bladeReach(at: 0, in: t, screen: screen), 0))
-        #expect(close(SplashLogic.bladeReach(at: t.pull, in: t, screen: screen), full))
-        #expect(close(SplashLogic.bladeReach(at: t.snapStarts - 0.01, in: t, screen: screen), full))
+        #expect(close(reach(at: 0), 0))
+        #expect(close(reach(at: timeline.pull), full))
+        #expect(close(reach(at: timeline.snapStarts - 0.01), full))
         // The hook's outer edge is exactly at the right edge of the screen.
         #expect(close(screen.width / 2 + SplashLogic.markSize.width / 2 + full, screen.width))
-        #expect(close(CGFloat(SplashLogic.counterValue(at: t.pull, in: t, screen: screen)), 1.2))
-        #expect(SplashLogic.counterOpacity(at: t.pull, in: t) == 1)
-        #expect(SplashLogic.counterOpacity(at: t.snapEnds, in: t) == 0)
     }
 
-    @Test func bladeIsBackAtRestBeforeTheDive() {
-        let t = timeline(.pull)
-        #expect(close(SplashLogic.bladeReach(at: t.snapEnds, in: t, screen: screen), 0))
-        // One small bounce into the case after it snaps home…
-        #expect(SplashLogic.bladeReach(at: t.snapEnds + t.settle * 0.2, in: t, screen: screen) < 0)
-        // …and the case kicks, then is still before the dive.
-        #expect(abs(SplashLogic.recoil(at: t.snapEnds + t.settle * 0.15, in: t)) > 0.3)
-        #expect(close(SplashLogic.bladeReach(at: t.exitStarts, in: t, screen: screen), 0))
-        #expect(abs(SplashLogic.recoil(at: t.exitStarts, in: t)) < 1e-9)
-        #expect(close(SplashLogic.markOffset(at: t.exitStarts, in: t, screen: screen).width, 0))
-        #expect(SplashLogic.diveProgress(at: t.exitStarts, in: t) == 0)
+    @Test func pullDeceleratesAllTheWay() {
+        let path = samples(from: 0, to: timeline.pull, reach)
+        let speeds = zip(path, path.dropFirst()).map { $1 - $0 }
+        #expect(speeds.allSatisfy { $0 >= 0 })
+        #expect(zip(speeds, speeds.dropFirst()).allSatisfy { $1 <= $0 + 1e-9 })
+        // Fast off the mark: most of the way out by the halfway point.
+        #expect(reach(at: timeline.pull / 2) > SplashLogic.pullReach(screen: screen) * 0.8)
     }
 
-    @Test func snapIsFasterThanThePull() {
-        let t = timeline(.pull)
-        #expect(t.snap < t.pull / 2)
-        // Ease-in: it has covered less than half the way back at half time.
-        let full = SplashLogic.pullReach(screen: screen)
-        let half = SplashLogic.bladeReach(at: t.snapStarts + t.snap / 2, in: t, screen: screen)
-        #expect(half > full / 2)
+    @Test func snapAcceleratesIntoTheCase() {
+        #expect(timeline.snap < timeline.pull / 2)
+        let path = samples(from: timeline.snapStarts, to: timeline.snapEnds, reach)
+        let speeds = zip(path, path.dropFirst()).map { $0 - $1 }
+        #expect(speeds.allSatisfy { $0 >= 0 })
+        #expect(zip(speeds, speeds.dropFirst()).allSatisfy { $1 >= $0 - 1e-9 })
     }
 
-    // MARK: - Wipe
-
-    @Test func wipeSpansTheScreenThenLeavesOffTheBottom() {
-        let t = timeline(.wipe)
-        let reach = SplashLogic.bladeReach(at: t.pull, in: t, screen: screen)
-        let offset = SplashLogic.markOffset(at: t.pull, in: t, screen: screen)
-        let markLeft = screen.width / 2 - SplashLogic.markSize.width / 2 + offset.width
-        #expect(close(markLeft, SplashLogic.caseInset))
-        #expect(close(markLeft + SplashLogic.markSize.width + reach, screen.width))
-
-        // The reveal line starts at the blade's top edge and ends below the
-        // screen, with the whole case off the bottom too.
-        let startLine = SplashLogic.revealLine(at: 0, in: t, screen: screen)
-        #expect(close(startLine, screen.height / 2 - SplashLogic.markSize.height / 2 + TapeMark.bladeTop * SplashLogic.pointsPerUnit))
-        let end = SplashLogic.markOffset(at: t.total, in: t, screen: screen)
-        #expect(screen.height / 2 - SplashLogic.markSize.height / 2 + end.height > screen.height)
-        #expect(SplashLogic.revealLine(at: t.total, in: t, screen: screen) > screen.height)
-
-        #expect(SplashLogic.upperGroundOpacity(at: t.exitStarts, in: t) == 1)
-        #expect(SplashLogic.upperGroundOpacity(at: t.total, in: t) == 0)
-        #expect(t.hapticTimes == [t.pull])
+    @Test func snapBouncesOnceIntoTheCaseAndLandsAtRest() {
+        #expect(close(reach(at: timeline.snapEnds), 0))
+        let settle = samples(from: timeline.snapEnds, to: timeline.diveStarts, reach)
+        // Into the case by the overshoot and no further, and never back out past rest.
+        #expect(close(settle.min() ?? 0, -SplashLogic.snapOvershoot, within: 0.01))
+        #expect(settle.allSatisfy { $0 <= 1e-9 })
+        // One dip: down, then up, never down again.
+        let steps = zip(settle, settle.dropFirst()).map { $1 - $0 }.filter { abs($0) > 1e-9 }
+        let turns = zip(steps, steps.dropFirst()).filter { ($0 < 0) != ($1 < 0) }.count
+        #expect(turns == 1)
+        // Back at rest, and still, well before the dive.
+        let landed = timeline.snapEnds + timeline.settle * SplashLogic.bounceShare
+        #expect(close(reach(at: landed), 0))
+        #expect(close(reach(at: landed - 0.001), 0, within: 0.01))
+        #expect(close(reach(at: timeline.diveStarts), 0))
     }
 
-    @Test func wipeTravelEasesInAndOut() {
-        let t = timeline(.wipe)
-        let distance = SplashLogic.travelDistance(screen: screen)
-        let early = SplashLogic.markOffset(at: t.exitStarts + t.travel * 0.1, in: t, screen: screen).height
-        let middle = SplashLogic.markOffset(at: t.exitStarts + t.travel * 0.5, in: t, screen: screen).height
-        #expect(early < distance * 0.1)
-        #expect(close(middle, distance / 2, within: distance * 0.02))
-    }
-
-    // MARK: - Reel
-
-    @Test func tickerLandsOnPlot() {
-        let t = timeline(.reel)
-        #expect(SplashLogic.tickerUnits.last == "plot")
-        #expect(Set(SplashLogic.tickerUnits).count == SplashLogic.tickerUnits.count)
-        #expect(SplashLogic.tickerUnit(at: 0, in: t) == SplashLogic.tickerUnits.first)
-        let last = CGFloat(SplashLogic.tickerUnits.count - 1)
-        #expect(close(SplashLogic.tickerPosition(at: t.roll, in: t), last))
-        #expect(close(SplashLogic.tickerPosition(at: t.exitStarts, in: t), last))
-        #expect(SplashLogic.tickerUnit(at: t.exitStarts, in: t) == "plot")
-        #expect(SplashLogic.tickerUnit(at: t.total, in: t) == "plot")
-        #expect(t.hapticTimes == [t.roll])
-    }
-
-    @Test func tickerOnlyMovesForward() {
-        let t = timeline(.reel)
-        var previous = SplashLogic.tickerPosition(at: 0, in: t)
-        for step in 1...100 {
-            let now = SplashLogic.tickerPosition(at: t.roll * Double(step) / 100, in: t)
-            #expect(now >= previous)
-            previous = now
+    @Test func caseKicksThenIsStillForTheDive() {
+        // About 5° at the peak of the kick.
+        let peak = samples(from: timeline.snapEnds, to: timeline.diveStarts) {
+            CGFloat(SplashLogic.kickDegrees * SplashLogic.kick(at: $0, in: timeline))
+        }.max() ?? 0
+        #expect(peak > 4.5 && peak < 5.5)
+        #expect(SplashLogic.kick(at: timeline.snapEnds - 0.001, in: timeline) == 0)
+        // Damped: each swing smaller than the last, and still when the dive starts.
+        let swing = samples(from: timeline.snapEnds, to: timeline.diveStarts) {
+            CGFloat(SplashLogic.kick(at: $0, in: timeline))
         }
+        let extremes = zip(zip(swing, swing.dropFirst()), swing.dropFirst(2))
+            .filter { pair, next in (pair.1 - pair.0) * (next - pair.1) < 0 }
+            .map { abs($0.0.1) }
+        #expect(extremes.count >= 2)
+        #expect(zip(extremes, extremes.dropFirst()).allSatisfy { $1 < $0 })
+        #expect(abs(SplashLogic.kick(at: timeline.diveStarts, in: timeline)) < 1e-9)
+        #expect(abs(SplashLogic.kick(at: timeline.diveStarts - 0.001, in: timeline)) < 1e-4)
+        #expect(close(SplashLogic.markOffset(at: timeline.diveStarts, in: timeline), 0))
+        #expect(SplashLogic.diveProgress(at: timeline.diveStarts, in: timeline) == 0)
     }
 
-    @Test func hubSpinsWithTheTickerAndStops() {
-        let t = timeline(.reel)
-        let landed = SplashLogic.hubAngle(at: t.roll, in: t, screen: screen).degrees
-        #expect(abs(landed - 360 * SplashLogic.reelTurns) < 1e-6)
-        #expect(abs(SplashLogic.hubAngle(at: t.exitStarts, in: t, screen: screen).degrees - landed) < 1e-6)
-        #expect(SplashLogic.slotOpacity(at: 0, in: t) == 0)
-        #expect(SplashLogic.slotOpacity(at: t.roll, in: t) == 1)
+    @Test func hubTurnsWithTheBladeAndComesBack() {
+        #expect(SplashLogic.hubAngle(at: 0, in: timeline, screen: screen).radians == 0)
+        #expect(SplashLogic.hubAngle(at: timeline.pull, in: timeline, screen: screen).radians < -1)
+        #expect(abs(SplashLogic.hubAngle(at: timeline.diveStarts, in: timeline, screen: screen).radians) < 1e-9)
     }
 
-    // MARK: - Exit
+    // MARK: - Counter
 
-    @Test(arguments: SplashLogic.Variant.allCases)
-    func appEndsAtFullSize(_ variant: SplashLogic.Variant) {
-        let t = timeline(variant)
-        #expect(close(SplashLogic.appScale(at: t.total, in: t), 1))
-        #expect(abs(SplashLogic.creditOpacity(at: t.total, in: t)) < 0.001)
-        #expect(SplashLogic.creditOpacity(at: 0, in: t) == 0)
+    @Test func counterReadsTheBlade() {
+        func value(_ t: Double) -> Double { SplashLogic.counterValue(at: t, in: timeline, screen: screen) }
+        #expect(value(0) == 0)
+        #expect(abs(value(timeline.pull) - 1.2) < 1e-9)
+        #expect(abs(value(timeline.snapStarts) - 1.2) < 1e-9)
+        // Most of the reading comes early, with the blade.
+        #expect(value(timeline.pull / 2) > 1)
+        // It keeps the reading as it fades out during the whip, rather than counting down.
+        #expect(abs(value(timeline.snapStarts + timeline.snap / 2) - 1.2) < 1e-9)
+        #expect(abs(value(timeline.snapEnds) - 1.2) < 1e-9)
+        // Only ever counts up.
+        let readings = samples(from: 0, to: timeline.snapEnds) { CGFloat(value($0)) }
+        #expect(zip(readings, readings.dropFirst()).allSatisfy { $1 >= $0 })
     }
 
-    @Test(arguments: [SplashLogic.Variant.pull, .reel])
-    func diveDipsThenPushesPast(_ variant: SplashLogic.Variant) {
-        let t = timeline(variant)
-        #expect(SplashLogic.diveScale(at: t.exitStarts + t.dive * 0.1, in: t) < 1)
-        #expect(close(SplashLogic.diveScale(at: t.total, in: t), 6, within: 0.001))
-        #expect(SplashLogic.appScale(at: t.exitStarts, in: t) < 1)
-        #expect(SplashLogic.creditOpacity(at: t.exitStarts, in: t) == 1)
-        // Nothing starts from nothing: the mark is at full size until the dive.
-        #expect(SplashLogic.diveScale(at: 0, in: t) == 1)
+    @Test func counterFadesInWithThePullAndOutWithTheSnap() {
+        #expect(SplashLogic.counterOpacity(at: 0, in: timeline) == 0)
+        #expect(SplashLogic.counterOpacity(at: timeline.pull, in: timeline) == 1)
+        #expect(SplashLogic.counterOpacity(at: timeline.snapStarts, in: timeline) == 1)
+        #expect(SplashLogic.counterOpacity(at: timeline.snapEnds, in: timeline) == 0)
     }
 
-    @Test func wipeNeverScalesTheApp() {
-        let t = timeline(.wipe)
-        for step in 0...20 {
-            let time = t.total * Double(step) / 20
-            #expect(SplashLogic.appScale(at: time, in: t) == 1)
-            #expect(SplashLogic.diveScale(at: time, in: t) == 1)
+    @Test func counterSitsOverTheMiddleOfTheBladeAndStaysPutForTheSnap() {
+        let caseEdge = TapeMark.caseSide * SplashLogic.pointsPerUnit
+        let hookEnd = SplashLogic.markSize.width + SplashLogic.pullReach(screen: screen)
+        let held = SplashLogic.counterX(at: timeline.pull, in: timeline, screen: screen)
+        #expect(close(held, (caseEdge + hookEnd) / 2))
+        #expect(close(SplashLogic.counterX(at: timeline.snapEnds, in: timeline, screen: screen), held))
+    }
+
+    // MARK: - Dive
+
+    @Test func diveDipsThenPushesPast() {
+        #expect(SplashLogic.diveScale(at: timeline.diveStarts + timeline.dive * 0.1, in: timeline) < 1)
+        #expect(SplashLogic.diveScale(at: timeline.diveStarts + timeline.dive * 0.1, in: timeline) >= 0.94)
+        #expect(close(SplashLogic.diveScale(at: timeline.total, in: timeline), 6, within: 0.001))
+        #expect(SplashLogic.appScale(at: timeline.diveStarts, in: timeline) < 1)
+        // Nothing starts from nothing: the mark is at full size until the dive,
+        // and the app never smaller than 94 %.
+        #expect(samples(from: 0, to: timeline.diveStarts) { SplashLogic.diveScale(at: $0, in: timeline) }.allSatisfy { $0 == 1 })
+        #expect(samples(from: 0, to: timeline.total) { SplashLogic.appScale(at: $0, in: timeline) }.allSatisfy { $0 >= 0.94 })
+    }
+
+    @Test func appEndsAtFullSize() {
+        #expect(close(SplashLogic.appScale(at: timeline.total, in: timeline), 1))
+        #expect(SplashLogic.diveProgress(at: timeline.total, in: timeline) == 1)
+    }
+
+    @Test func creditFadesInWithThePullAndOutWithTheDive() {
+        #expect(SplashLogic.creditOpacity(at: 0, in: timeline) == 0)
+        #expect(SplashLogic.creditOpacity(at: timeline.pull, in: timeline) == 1)
+        #expect(SplashLogic.creditOpacity(at: timeline.diveStarts, in: timeline) == 1)
+        #expect(abs(SplashLogic.creditOpacity(at: timeline.total, in: timeline)) < 0.001)
+        // Never pops: each fade spreads over at least six 60 Hz frames. The
+        // fade-out runs with the blue it sits on, fast at first like the dive.
+        let fade = samples(from: 0, to: timeline.total, count: Int(timeline.total * 60)) {
+            CGFloat(SplashLogic.creditOpacity(at: $0, in: timeline))
         }
+        #expect(zip(fade, fade.dropFirst()).allSatisfy { abs($1 - $0) < 0.2 })
     }
 }
