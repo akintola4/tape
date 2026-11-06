@@ -11,11 +11,39 @@ import SwiftUI
 @main
 struct TapeApp: App {
     @State private var settings = AppSettings()
+    /// Once per cold launch. Coming back from the background skips it.
+    @State private var showSplash = !LaunchOptions.skipSplash
+    @State private var splashStart: Date?
+    /// Set inside the tap's fade, so the app settles to full size with it.
+    @State private var splashSkipped = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private let splashTimeline = SplashLogic.Timeline().slowed(by: LaunchOptions.splashSlowdown)
 
     var body: some Scene {
         WindowGroup {
-            ConverterView(settings: settings)
+            ZStack {
+                TimelineView(.animation(paused: !showSplash)) { context in
+                    ConverterView(settings: settings)
+                        .scaleEffect(appScale(at: context.date))
+                }
+                if showSplash {
+                    SplashOverlay(
+                        haptics: settings.haptics,
+                        timeline: splashTimeline,
+                        frozenAt: LaunchOptions.splashFrozenAt,
+                        onStart: { splashStart = $0 },
+                        onSkip: { splashSkipped = true },
+                        onFinish: { showSplash = false }
+                    )
+                }
+            }
         }
+    }
+
+    private func appScale(at date: Date) -> CGFloat {
+        guard showSplash, !splashSkipped, !reduceMotion else { return 1 }
+        let t = LaunchOptions.splashFrozenAt ?? splashStart.map { date.timeIntervalSince($0) } ?? 0
+        return SplashLogic.appScale(at: t, in: splashTimeline)
     }
 }
 
@@ -39,6 +67,16 @@ enum LaunchOptions {
 
     /// `-TapeDemoToast`: show the "Copied" toast for the first row, and leave it up.
     static var demoToast: Bool { flag("-TapeDemoToast") }
+
+    /// `-TapeNoSplash`: open straight on the converter, for screenshots.
+    static var skipSplash: Bool { flag("-TapeNoSplash") }
+
+    /// `-TapeSplashSlow`: play the opening animation 4× slower, for tuning it.
+    static var splashSlowdown: Double { flag("-TapeSplashSlow") ? 4 : 1 }
+
+    /// `-TapeSplashAt 0.6`: hold the opening animation at this many seconds
+    /// in, for stills. It never moves on to the app.
+    static var splashFrozenAt: Double? { value(after: "-TapeSplashAt").flatMap(Double.init) }
 
     /// `-TapeDemoTyping "2.5<<<8"`: after a moment, types this into the amount
     /// field one key at a time; `<` is delete. For recording the drawing change.
