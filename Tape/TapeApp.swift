@@ -40,6 +40,10 @@ enum LaunchOptions {
     /// `-TapeDemoToast`: show the "Copied" toast for the first row, and leave it up.
     static var demoToast: Bool { flag("-TapeDemoToast") }
 
+    /// `-TapeDemoTyping "2.5<<<8"`: after a moment, types this into the amount
+    /// field one key at a time; `<` is delete. For recording the drawing change.
+    static var demoTyping: String? { value(after: "-TapeDemoTyping") }
+
     private static func flag(_ name: String) -> Bool {
         #if DEBUG
         ProcessInfo.processInfo.arguments.contains(name)

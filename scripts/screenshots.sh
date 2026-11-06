@@ -24,7 +24,7 @@ shot() { # appearance, file, launch arguments...
   local appearance=$1 file=$2; shift 2
   xcrun simctl ui "$UDID" appearance "$appearance"
   xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE" "$@" >/dev/null
-  sleep 2.5
+  sleep 3
   xcrun simctl io "$UDID" screenshot "$OUT/$file" >/dev/null 2>&1
   echo "wrote $OUT/$file"
 }
@@ -38,6 +38,27 @@ shot light acre-to-plots.png -TapeCategory area -TapeUnit acre -TapeAmount 1
 shot dark copied-dark.png -TapeCategory cooking -TapeUnit cup -TapeAmount 1 -TapeDemoToast
 shot light settings-light.png -TapeCategory area -TapeOpenSettings
 shot dark settings-dark.png -TapeCategory area -TapeOpenSettings
+
+# Picture it: the five everyday cases in both appearances, then a small and
+# a large value per category to check the comparison switches.
+mkdir -p "$OUT/picture-it"
+for appearance in light dark; do
+  shot $appearance picture-it/area-1acre-$appearance.png -TapeCategory area -TapeUnit acre -TapeAmount 1
+  shot $appearance picture-it/weight-70kg-$appearance.png -TapeCategory weight -TapeUnit kg -TapeAmount 70
+  shot $appearance picture-it/length-6ft-$appearance.png -TapeCategory length -TapeUnit ft -TapeAmount 6
+  shot $appearance picture-it/cooking-1cup-$appearance.png -TapeCategory cooking -TapeUnit cup -TapeAmount 1
+  shot $appearance picture-it/temperature-30c-$appearance.png -TapeCategory temperature -TapeUnit c -TapeAmount 30
+done
+shot light picture-it/area-2m2.png -TapeCategory area -TapeUnit m2 -TapeAmount 2
+shot light picture-it/area-30ha.png -TapeCategory area -TapeUnit ha -TapeAmount 30
+shot light picture-it/weight-10g.png -TapeCategory weight -TapeUnit g -TapeAmount 10
+shot light picture-it/weight-100t.png -TapeCategory weight -TapeUnit t -TapeAmount 100
+shot dark picture-it/length-5cm.png -TapeCategory length -TapeUnit cm -TapeAmount 5
+shot dark picture-it/length-20km.png -TapeCategory length -TapeUnit km -TapeAmount 20
+shot light picture-it/volume-5ml.png -TapeCategory volume -TapeUnit ml -TapeAmount 5
+shot light picture-it/volume-1m3.png -TapeCategory volume -TapeUnit m3 -TapeAmount 1
+shot dark picture-it/temperature-minus18c.png -TapeCategory temperature -TapeUnit c -TapeAmount -18
+shot dark picture-it/temperature-180c.png -TapeCategory temperature -TapeUnit c -TapeAmount 180
 
 xcrun simctl status_bar "$UDID" clear
 xcrun simctl ui "$UDID" appearance light

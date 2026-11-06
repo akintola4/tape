@@ -321,16 +321,16 @@ struct FeetAndInchesTests {
         #expect(UnitsLogic.formatFeetAndInches(metres: 1.76, locale: fr) == "5′ 9,3″")
     }
 
-    @Test func appearsInLengthResultsAfterFeet() {
+    @Test func leadsLengthResultsWhenTypingMetres() {
         let rows = UnitsLogic.rows(for: 1.83, from: unit("m", .length), locale: gb)
         let ids = rows.map(\.id)
-        #expect(ids == ["mm", "cm", "km", "in", "ft", UnitsLogic.feetAndInchesID, "yd", "mi"])
+        #expect(ids == [UnitsLogic.feetAndInchesID, "ft", "cm", "yd", "in", "mm", "km", "mi"])
         #expect(rows.first { $0.id == UnitsLogic.feetAndInchesID }?.copyText == "6′ 0″")
     }
 
     @Test func appearsAfterInchesWhenTypingFeet() {
         let ids = UnitsLogic.rows(for: 6, from: unit("ft", .length), locale: gb).map(\.id)
-        #expect(ids == ["mm", "cm", "m", "km", "in", UnitsLogic.feetAndInchesID, "yd", "mi"])
+        #expect(ids == ["cm", "m", "in", UnitsLogic.feetAndInchesID, "yd", "mm", "km", "mi"])
     }
 }
 
@@ -340,25 +340,25 @@ struct FeetAndInchesTests {
 struct ResultRowTests {
     @Test func onePlotListsEveryOtherAreaUnit() {
         let rows = UnitsLogic.rows(for: 1, from: unit("plot", .area), locale: gb)
-        #expect(rows.map(\.copyText) == ["668.9 m²", "7,200 ft²", "800 yd²", "0.1653 ac", "0.06689 ha"])
+        #expect(rows.map(\.copyText) == ["668.9 m²", "7,200 ft²", "0.1653 ac", "0.06689 ha", "800 yd²"])
     }
 
     @Test func plotRowFollowsTheSetting() {
         var plot = PlotSize()
         plot.preset = .metres18x36
         let rows = UnitsLogic.rows(for: 1296, from: unit("m2", .area), plot: plot, locale: gb)
-        #expect(rows.last?.copyText == "2 plots")
+        #expect(rows.first?.copyText == "2 plots")
     }
 
     @Test func inputUnitIsLeftOut() {
         let rows = UnitsLogic.rows(for: 1, from: unit("kg", .weight), locale: gb)
         #expect(!rows.map(\.id).contains("kg"))
-        #expect(rows.map(\.copyText) == ["1,000 g", "2.205 lb", "35.27 oz", "0.1575 st", "0.001 t"])
+        #expect(rows.map(\.copyText) == ["2.205 lb", "0.1575 st", "1,000 g", "35.27 oz", "0.001 t"])
     }
 
     @Test func cookingRows() {
         let rows = UnitsLogic.rows(for: 1, from: unit("cup", .cooking), locale: gb)
-        #expect(rows.map(\.copyText) == ["16 tbsp", "48 tsp", "240 mL", "0.24 L", "8.115 fl oz"])
+        #expect(rows.map(\.copyText) == ["240 mL", "16 tbsp", "48 tsp", "8.115 fl oz", "0.24 L"])
     }
 }
 

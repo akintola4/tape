@@ -174,8 +174,8 @@ nonisolated enum UnitsLogic {
 
     // MARK: Results
 
-    /// Every unit in the category except the one typed in, in catalog order.
-    /// Length gets a feet-and-inches row after feet.
+    /// Every unit in the category except the one typed in, most useful first
+    /// (see `UnitCatalog.resultOrder`). Length includes a feet-and-inches row.
     static func rows(
         for value: Double,
         from unit: TapeUnit,
@@ -183,26 +183,25 @@ nonisolated enum UnitsLogic {
         preference: DecimalPreference = .auto,
         locale: Locale = .current
     ) -> [ResultRow] {
-        var rows: [ResultRow] = []
-        for target in unit.category.units where target != unit {
-            let converted = convert(value, from: unit, to: target, plot: plot)
-            rows.append(ResultRow(
-                id: target.id,
-                name: target.name,
-                value: formatNumber(converted, unit: target, preference: preference, locale: locale),
-                symbol: target.symbol(for: converted)
-            ))
-            if target.id == "ft" || (unit.id == "ft" && target.id == "in") {
+        UnitCatalog.resultOrder(from: unit).compactMap { id in
+            if id == feetAndInchesID {
                 let metres = convert(value, from: unit, to: UnitCatalog.unit("m", in: .length)!)
-                rows.append(ResultRow(
+                return ResultRow(
                     id: feetAndInchesID,
                     name: "Feet and inches",
                     value: formatFeetAndInches(metres: metres, locale: locale),
                     symbol: ""
-                ))
+                )
             }
+            guard let target = UnitCatalog.unit(id, in: unit.category), target != unit else { return nil }
+            let converted = convert(value, from: unit, to: target, plot: plot)
+            return ResultRow(
+                id: target.id,
+                name: target.name,
+                value: formatNumber(converted, unit: target, preference: preference, locale: locale),
+                symbol: target.symbol(for: converted)
+            )
         }
-        return rows
     }
 
     // MARK: Plot

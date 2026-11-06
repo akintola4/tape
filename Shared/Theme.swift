@@ -20,6 +20,11 @@ nonisolated enum Theme {
     static let chipFill = Color("ChipFill")
     static let chipText = Color("ChipText")
 
+    /// The screen behind the cards, and the cards. Grouped, so cards are white
+    /// on light grey in light mode and grey on black in dark.
+    static let screenBackground = Color(uiColor: .systemGroupedBackground)
+    static let cardBackground = Color(uiColor: .secondarySystemGroupedBackground)
+
     /// SF Rounded, for headlines and every number on screen.
     static func display(_ style: Font.TextStyle) -> Font { .system(style, design: .rounded) }
 
