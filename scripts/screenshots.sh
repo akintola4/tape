@@ -4,7 +4,7 @@
 #   scripts/screenshots.sh [simulator name]     # default: iPhone 17 Pro
 #
 # Uses the Debug launch arguments (-TapeCategory, -TapeUnit, -TapeAmount,
-# -TapeOpenSettings, -TapeDemoToast) so no tapping is needed.
+# -TapeOpenSettings, -TapeDemoToast, -TapeNoSplash) so no tapping is needed.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -23,7 +23,7 @@ xcrun simctl status_bar "$UDID" override --time 9:41 --batteryState charged --ba
 shot() { # appearance, file, launch arguments...
   local appearance=$1 file=$2; shift 2
   xcrun simctl ui "$UDID" appearance "$appearance"
-  xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE" "$@" >/dev/null
+  xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE" -TapeNoSplash "$@" >/dev/null
   sleep 2.5
   xcrun simctl io "$UDID" screenshot "$OUT/$file" >/dev/null 2>&1
   echo "wrote $OUT/$file"

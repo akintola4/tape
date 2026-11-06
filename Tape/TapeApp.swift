@@ -11,11 +11,36 @@ import SwiftUI
 @main
 struct TapeApp: App {
     @State private var settings = AppSettings()
+    /// Once per cold launch. Coming back from the background skips it.
+    @State private var showSplash = !LaunchOptions.skipSplash
+    @State private var splashStart: Date?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private let splashTimeline = SplashLogic.Timeline(variant: LaunchOptions.splashVariant)
+        .slowed(by: LaunchOptions.splashSlowdown)
 
     var body: some Scene {
         WindowGroup {
-            ConverterView(settings: settings)
+            ZStack {
+                TimelineView(.animation(paused: !showSplash)) { context in
+                    ConverterView(settings: settings)
+                        .scaleEffect(appScale(at: context.date))
+                }
+                if showSplash {
+                    SplashOverlay(
+                        haptics: settings.haptics,
+                        timeline: splashTimeline,
+                        onStart: { splashStart = $0 },
+                        onFinish: { showSplash = false }
+                    )
+                }
+            }
         }
+    }
+
+    private func appScale(at date: Date) -> CGFloat {
+        guard showSplash, !reduceMotion else { return 1 }
+        let t = splashStart.map { date.timeIntervalSince($0) } ?? 0
+        return SplashLogic.appScale(at: t, in: splashTimeline)
     }
 }
 
@@ -39,6 +64,18 @@ enum LaunchOptions {
 
     /// `-TapeDemoToast`: show the "Copied" toast for the first row, and leave it up.
     static var demoToast: Bool { flag("-TapeDemoToast") }
+
+    /// `-TapeNoSplash`: open straight on the converter, for screenshots.
+    static var skipSplash: Bool { flag("-TapeNoSplash") }
+
+    /// `-TapeSplashSlow`: play the opening animation 4× slower, for tuning it.
+    static var splashSlowdown: Double { flag("-TapeSplashSlow") ? 4 : 1 }
+
+    /// `-TapeSplash pull|wipe|reel`: which opening animation to play while
+    /// one is being chosen. Pull when absent.
+    static var splashVariant: SplashLogic.Variant {
+        value(after: "-TapeSplash").flatMap(SplashLogic.Variant.init(rawValue:)) ?? .pull
+    }
 
     private static func flag(_ name: String) -> Bool {
         #if DEBUG
