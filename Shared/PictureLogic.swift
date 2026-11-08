@@ -329,9 +329,7 @@ nonisolated enum PictureLogic {
         default: ""
         }
         if whole == 0, !glyph.isEmpty { return glyph }
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.locale = locale
+        let formatter = UnitsLogic.numberFormatter(locale: locale)
         formatter.maximumFractionDigits = 0
         return (formatter.string(from: whole as NSNumber) ?? "\(whole)") + glyph
     }
@@ -388,9 +386,7 @@ nonisolated enum PictureLogic {
     }
 
     private static func number(_ value: Double, locale: Locale) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.locale = locale
+        let formatter = UnitsLogic.numberFormatter(locale: locale)
         formatter.maximumFractionDigits = 2
         return formatter.string(from: value as NSNumber) ?? "\(value)"
     }
@@ -460,7 +456,7 @@ nonisolated enum PictureLogic {
         let anchor = anchor(celsius: celsius)
         return Picture(
             lead: "",
-            emphasis: UnitsLogic.format(value, unit: unit, locale: locale).replacingOccurrences(of: "-", with: "−"),
+            emphasis: UnitsLogic.format(value, unit: unit, locale: locale),
             trail: ", " + anchor.phrase,
             detail: anchor.detail,
             drawing: .thermometer(fill: thermometerFill(celsius: celsius))

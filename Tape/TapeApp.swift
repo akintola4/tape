@@ -10,7 +10,7 @@ import SwiftUI
 
 @main
 struct TapeApp: App {
-    @State private var settings = AppSettings()
+    @State private var settings: AppSettings
     /// Once per cold launch. Coming back from the background skips it.
     @State private var showSplash = !LaunchOptions.skipSplash
     @State private var splashStart: Date?
@@ -18,6 +18,12 @@ struct TapeApp: App {
     @State private var splashSkipped = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let splashTimeline = SplashLogic.Timeline().slowed(by: LaunchOptions.splashSlowdown)
+
+    init() {
+        // Settings moved to the App Group so the widget can read them.
+        TapePersistence.migrate(from: .standard, to: TapeShared.defaults)
+        _settings = State(initialValue: AppSettings())
+    }
 
     var body: some Scene {
         WindowGroup {

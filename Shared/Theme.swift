@@ -13,7 +13,9 @@ nonisolated enum Theme {
     /// Baby blue #8FD3FF in dark mode. In light mode the asset catalog's
     /// AccentColor is a deeper #1874B0, because #8FD3FF on white is 1.6:1 and
     /// unreadable as text; #1874B0 is 5.0:1 on white and 4.5:1 on the cards.
-    static let accent = Color.accentColor
+    /// Named rather than `Color.accentColor`, which a widget or an offscreen
+    /// render doesn't always pick up; the app and the widget each ship the asset.
+    static let accent = Color("AccentColor")
 
     /// The active category chip: #8FD3FF in both modes, with `chipText` on it
     /// (9.1:1).

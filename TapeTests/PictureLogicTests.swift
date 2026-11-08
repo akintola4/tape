@@ -291,8 +291,7 @@ struct PictureTests {
                       (100, "c", "100 °C, water boils"), (0, "c", "0 °C, where water freezes"),
                       (86, "f", "86 °F, a hot Lagos afternoon"), (-18, "c", "−18 °C, freezer cold")])
     func temperatureAnchors(_ value: Double, _ id: String, _ expected: String) {
-        let sentence = picture(value, id, .temperature).sentence
-        #expect(sentence.replacingOccurrences(of: "-", with: "−") == expected)
+        #expect(picture(value, id, .temperature).sentence == expected)
     }
 
     @Test func thermometerFill() {
