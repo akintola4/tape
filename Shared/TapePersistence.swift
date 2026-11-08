@@ -2,12 +2,27 @@
 //  TapePersistence.swift
 //  Tape
 //
-//  Everything Tape remembers, in UserDefaults: settings, the last category,
-//  and the unit and amount last used in each category. Every function takes
-//  the defaults it reads, so the tests can use a throwaway suite.
+//  Shared between the app AND the widget extension.
+//
+//  Everything Tape remembers, in the App Group's UserDefaults: settings, the
+//  last category, and the unit and amount last used in each category. The
+//  widget reads the plot size and decimals from the same suite, so its numbers
+//  match the app's. Every function takes the defaults it reads, so the tests
+//  can use a throwaway suite.
 //
 
 import Foundation
+
+nonisolated enum TapeShared {
+    /// Comes from `TAPE_APP_GROUP` in Config/Tape.xcconfig via each target's
+    /// Info.plist, so changing the bundle prefix there is the only edit needed.
+    static let appGroupID: String =
+        (Bundle.main.object(forInfoDictionaryKey: "TapeAppGroup") as? String) ?? "group.foster.tape"
+
+    /// The App Group suite. On the Simulator this resolves without portal
+    /// provisioning. Falls back to `.standard` only if the suite can't be opened.
+    static let defaults: UserDefaults = UserDefaults(suiteName: appGroupID) ?? .standard
+}
 
 nonisolated enum SettingsKeys {
     static let category = "category"
@@ -62,6 +77,25 @@ nonisolated enum TapePersistence {
         if let length = defaults.object(forKey: SettingsKeys.plotLength) as? Double { plot.customLength = length }
         plot.customUnit = PlotSideUnit(rawValue: defaults.string(forKey: SettingsKeys.plotUnit) ?? "") ?? .feet
         return plot
+    }
+
+    // MARK: Moving to the App Group
+
+    /// Every key Tape has ever written, for the one-time move below.
+    static func allKeys() -> [String] {
+        [SettingsKeys.category, SettingsKeys.decimals, SettingsKeys.haptics,
+         SettingsKeys.plotPreset, SettingsKeys.plotWidth, SettingsKeys.plotLength, SettingsKeys.plotUnit]
+            + UnitCategory.allCases.flatMap { [SettingsKeys.unit($0), SettingsKeys.amount($0)] }
+    }
+
+    /// Before the widget, settings lived in `.standard`, where the widget can't
+    /// see them. Copies each one into the App Group unless it's already there,
+    /// so an update keeps the plot size and last amounts. Safe to run every launch.
+    static func migrate(from old: UserDefaults, to new: UserDefaults) {
+        guard old !== new else { return }
+        for key in allKeys() where new.object(forKey: key) == nil {
+            if let value = old.object(forKey: key) { new.set(value, forKey: key) }
+        }
     }
 
     static func save(plot: PlotSize, to defaults: UserDefaults) {

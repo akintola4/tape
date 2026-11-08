@@ -28,14 +28,18 @@ struct ConverterView: View {
     /// Wide enough for "US gal", so every value ends at the same x.
     @ScaledMetric(relativeTo: .subheadline) private var symbolSlot: CGFloat = 50
 
-    init(settings: AppSettings, defaults: UserDefaults = .standard) {
+    init(settings: AppSettings, defaults: UserDefaults = TapeShared.defaults) {
         self.settings = settings
         self.defaults = defaults
         let category = LaunchOptions.category ?? TapePersistence.category(from: defaults)
         _category = State(initialValue: category)
         _unit = State(initialValue: LaunchOptions.unitID.map { UnitCatalog.unitOrDefault($0, in: category) }
             ?? TapePersistence.unit(for: category, from: defaults))
-        _amountText = State(initialValue: LaunchOptions.amount ?? TapePersistence.amount(for: category, from: defaults))
+        // Sanitized so an amount saved or passed with a hyphen shows the true minus.
+        _amountText = State(initialValue: UnitsLogic.sanitizeAmount(
+            LaunchOptions.amount ?? TapePersistence.amount(for: category, from: defaults),
+            allowsNegative: category.allowsNegative
+        ))
     }
 
     // MARK: Derived values
@@ -102,6 +106,9 @@ struct ConverterView: View {
                 try? await Task.sleep(for: .milliseconds(700))
                 if key == "<" { amountText = String(amountText.dropLast()) } else { amountText.append(key) }
             }
+        }
+        .onOpenURL { url in
+            if let link = TapeLink(url: url) { open(link) }
         }
         .sheet(isPresented: $showSettings) {
             SettingsView(settings: settings)
@@ -333,6 +340,19 @@ struct ConverterView: View {
         amountText = TapePersistence.amount(for: item, from: defaults)
         TapePersistence.save(category: item, to: defaults)
         selectionTick += 1
+    }
+
+    /// A tap on the widget: its category, unit and amount, kept as if typed.
+    private func open(_ link: TapeLink) {
+        withAnimation(reduceMotion ? nil : Tokens.Motion.quick) {
+            category = link.category
+        }
+        unit = link.unit
+        amountText = link.fieldText()
+        showSettings = false
+        TapePersistence.save(category: link.category, to: defaults)
+        TapePersistence.save(unit: link.unit, to: defaults)
+        TapePersistence.save(amount: amountText, for: link.category, to: defaults)
     }
 
     /// Makes `target` the unit being typed in, carrying the value across so

@@ -162,7 +162,52 @@ struct TemperatureTests {
         #expect(UnitsLogic.format(convert(37, "c", "f", .temperature), unit: fahrenheit, locale: gb) == "98.6 °F")
         #expect(UnitsLogic.format(convert(0, "c", "k", .temperature), unit: kelvin, locale: gb) == "273.15 K")
         #expect(UnitsLogic.format(convert(100, "c", "f", .temperature), unit: fahrenheit, locale: gb) == "212 °F")
-        #expect(UnitsLogic.format(-40, unit: fahrenheit, locale: gb) == "-40 °F")
+        #expect(UnitsLogic.format(-40, unit: fahrenheit, locale: gb) == "−40 °F")
+    }
+}
+
+// MARK: - Minus sign
+
+@Suite("Negative numbers use the true minus")
+struct MinusSignTests {
+    private let minus: Character = "\u{2212}"
+
+    @Test func fahrenheitBelowZero() {
+        // 0 °F is −17.78 °C, and −18 °C is −0.4 °F.
+        let shown = UnitsLogic.format(convert(-18, "c", "f", .temperature), unit: unit("f", .temperature), locale: gb)
+        #expect(shown == "−0.4 °F")
+        #expect(shown.first == minus)
+        #expect(!shown.contains("-"))
+    }
+
+    @Test func celsiusBelowZero() {
+        #expect(UnitsLogic.format(-18, unit: unit("c", .temperature), locale: gb) == "−18 °C")
+    }
+
+    @Test func minusFortyIsTheSameInBothScales() {
+        let fahrenheit = convert(-40, "c", "f", .temperature)
+        #expect(UnitsLogic.format(fahrenheit, unit: unit("f", .temperature), locale: gb) == "−40 °F")
+        let rows = UnitsLogic.rows(for: -40, from: unit("c", .temperature), locale: gb)
+        #expect(rows.first?.copyText == "−40 °F")
+        #expect(rows.allSatisfy { !$0.value.contains("-") })
+    }
+
+    @Test func otherLocalesGetItToo() {
+        #expect(UnitsLogic.formatNumber(-18.5, unit: unit("c", .temperature), locale: fr) == "−18,5")
+    }
+
+    @Test func negativeZeroIsJustZero() {
+        #expect(UnitsLogic.formatNumber(-0.0001, unit: unit("c", .temperature), locale: gb) == "0")
+    }
+
+    @Test func feetAndInchesBelowZero() {
+        #expect(UnitsLogic.formatFeetAndInches(metres: -1.8288, locale: gb) == "−6′ 0″")
+    }
+
+    @Test func typingAHyphenShowsTheTrueMinus() {
+        #expect(UnitsLogic.sanitizeAmount("-18", allowsNegative: true, locale: gb) == "−18")
+        #expect(UnitsLogic.parseAmount("−18", locale: gb) == -18)
+        #expect(UnitsLogic.parseAmount("-18", locale: gb) == -18)
     }
 }
 
@@ -398,7 +443,8 @@ struct AmountInputTests {
     }
 
     @Test func sanitizeOnlyKeepsAMinusWhereAllowed() {
-        #expect(UnitsLogic.sanitizeAmount("-40", allowsNegative: true, locale: gb) == "-40")
+        #expect(UnitsLogic.sanitizeAmount("-40", allowsNegative: true, locale: gb) == "−40")
+        #expect(UnitsLogic.sanitizeAmount("−40", allowsNegative: true, locale: gb) == "−40")
         #expect(UnitsLogic.sanitizeAmount("-40", allowsNegative: false, locale: gb) == "40")
         #expect(UnitsLogic.sanitizeAmount("4-0", allowsNegative: true, locale: gb) == "40")
     }
@@ -408,9 +454,10 @@ struct AmountInputTests {
     }
 
     @Test func toggleSign() {
-        #expect(UnitsLogic.toggleSign("40") == "-40")
+        #expect(UnitsLogic.toggleSign("40") == "−40")
+        #expect(UnitsLogic.toggleSign("−40") == "40")
         #expect(UnitsLogic.toggleSign("-40") == "40")
-        #expect(UnitsLogic.toggleSign("") == "-")
+        #expect(UnitsLogic.toggleSign("") == "−")
     }
 }
 

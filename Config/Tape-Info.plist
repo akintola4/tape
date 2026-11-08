@@ -2,6 +2,19 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>tape</string>
+			</array>
+		</dict>
+	</array>
+	<key>TapeAppGroup</key>
+	<string>$(TAPE_APP_GROUP)</string>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>

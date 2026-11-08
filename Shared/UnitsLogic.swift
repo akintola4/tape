@@ -49,6 +49,9 @@ nonisolated enum UnitsLogic {
     static let significantDigits = 4
     /// Past this many decimals a value is too small to read, and `auto` shows 0.
     static let maxFractionDigits = 9
+    /// The true minus, U+2212. A hyphen is shorter and sits too low next to
+    /// rounded digits. Typing still accepts a hyphen; everything shown uses this.
+    static let minusSign = "\u{2212}"
 
     // MARK: Converting
 
@@ -115,8 +118,17 @@ nonisolated enum UnitsLogic {
 
     // MARK: Formatting
 
+    /// A decimal formatter in `locale` that writes the true minus.
+    static func numberFormatter(locale: Locale) -> NumberFormatter {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.locale = locale
+        formatter.minusSign = minusSign
+        return formatter
+    }
+
     /// The number alone, with the locale's grouping and decimal mark: "668.9",
-    /// "7,200", "0.1653". Never "-0".
+    /// "7,200", "0.1653", "−40". Never "−0".
     static func formatNumber(
         _ value: Double,
         unit: TapeUnit,
@@ -127,9 +139,7 @@ nonisolated enum UnitsLogic {
         let digits = fractionDigits(for: value, unit: unit, preference: preference)
         var number = rounded(value, places: digits.max)
         if number.isZero { number = 0 }
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.locale = locale
+        let formatter = numberFormatter(locale: locale)
         formatter.minimumFractionDigits = digits.min
         formatter.maximumFractionDigits = digits.max
         formatter.roundingMode = .halfUp
@@ -162,14 +172,12 @@ nonisolated enum UnitsLogic {
     /// "6′ 0″", "5′ 9.3″", in the locale's decimal mark.
     static func formatFeetAndInches(metres: Double, locale: Locale = .current) -> String {
         let split = feetAndInches(metres: metres)
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.locale = locale
+        let formatter = numberFormatter(locale: locale)
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 1
         let feet = formatter.string(from: split.feet as NSNumber) ?? "\(split.feet)"
         let inches = formatter.string(from: split.inches as NSDecimalNumber) ?? "\(split.inches)"
-        return "\(split.negative ? "−" : "")\(feet)′ \(inches)″"
+        return "\(split.negative ? minusSign : "")\(feet)′ \(inches)″"
     }
 
     // MARK: Results
@@ -209,9 +217,7 @@ nonisolated enum UnitsLogic {
     /// "60 × 120 ft"
     static func plotDimensions(_ plot: PlotSize, locale: Locale = .current) -> String {
         let s = plot.sides
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.locale = locale
+        let formatter = numberFormatter(locale: locale)
         formatter.maximumFractionDigits = 2
         let width = formatter.string(from: s.width as NSNumber) ?? "\(s.width)"
         let length = formatter.string(from: s.length as NSNumber) ?? "\(s.length)"
@@ -233,7 +239,7 @@ nonisolated enum UnitsLogic {
         let decimalMark = locale.decimalSeparator ?? "."
         let groupMark = locale.groupingSeparator ?? ","
         var cleaned = text.trimmingCharacters(in: .whitespaces)
-        let negative = cleaned.hasPrefix("-") || cleaned.hasPrefix("−")
+        let negative = startsWithMinus(cleaned)
         if negative { cleaned.removeFirst() }
         if groupMark != decimalMark {
             cleaned = cleaned.replacingOccurrences(of: groupMark, with: "")
@@ -248,8 +254,13 @@ nonisolated enum UnitsLogic {
         return negative ? -number : number
     }
 
+    /// A hyphen or a true minus at the start.
+    static func startsWithMinus(_ text: String) -> Bool {
+        text.hasPrefix("-") || text.hasPrefix(minusSign)
+    }
+
     /// What the amount field keeps as you type: an optional leading minus (only
-    /// where `allowsNegative`), digits and one decimal mark, at most
+    /// where `allowsNegative`, and always shown as the true minus), digits and one decimal mark, at most
     /// `maxIntegerDigits` whole digits and `maxFractionDigits` after the mark.
     /// Leading zeros go; ".5" becomes "0.5".
     static func sanitizeAmount(
@@ -260,7 +271,7 @@ nonisolated enum UnitsLogic {
         locale: Locale = .current
     ) -> String {
         let mark = Character(locale.decimalSeparator ?? ".")
-        let negative = allowsNegative && (text.hasPrefix("-") || text.hasPrefix("−"))
+        let negative = allowsNegative && startsWithMinus(text)
         var whole = ""
         var fraction = ""
         var seenMark = false
@@ -278,12 +289,12 @@ nonisolated enum UnitsLogic {
         while whole.count > 1, whole.first == "0" { whole.removeFirst() }
         if seenMark, whole.isEmpty { whole = "0" }
         let number = seenMark ? whole + String(mark) + fraction : whole
-        return negative ? "-" + number : number
+        return negative ? minusSign + number : number
     }
 
     /// Flips the sign of what's typed, for the ± key on temperature.
     static func toggleSign(_ text: String) -> String {
-        if text.hasPrefix("-") || text.hasPrefix("−") { return String(text.dropFirst()) }
-        return "-" + text
+        if startsWithMinus(text) { return String(text.dropFirst()) }
+        return minusSign + text
     }
 }
