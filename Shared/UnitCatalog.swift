@@ -138,6 +138,60 @@ nonisolated enum UnitCatalog {
         id.flatMap { unit($0, in: category) } ?? unit(category.defaultUnitID, in: category)!
     }
 
+    // MARK: Result order
+
+    /// The results list for `input`, most useful first. Someone typing acres
+    /// wants plots; someone typing kilograms wants pounds; someone typing feet
+    /// wants centimetres. `UnitsLogic.feetAndInchesID` is the split row.
+    static func resultOrder(from input: TapeUnit) -> [String] {
+        let ftin = UnitsLogic.feetAndInchesID
+        let order: [String] = switch (input.category, input.id) {
+        case (.length, "mm"): ["cm", "in", "m", "ft", ftin, "yd", "km", "mi"]
+        case (.length, "cm"): [ftin, "ft", "in", "m", "mm", "yd", "km", "mi"]
+        case (.length, "m"): [ftin, "ft", "cm", "yd", "in", "mm", "km", "mi"]
+        case (.length, "km"): ["mi", "m", "ft", "yd", "cm", "mm", "in", ftin]
+        case (.length, "in"): ["cm", "ft", ftin, "mm", "m", "yd", "km", "mi"]
+        case (.length, "ft"): ["cm", "m", "in", ftin, "yd", "mm", "km", "mi"]
+        case (.length, "yd"): ["m", "ft", ftin, "cm", "in", "mm", "km", "mi"]
+        case (.length, "mi"): ["km", "m", "yd", "ft", "cm", "in", "mm", ftin]
+
+        case (.area, "m2"): ["plot", "ft2", "acre", "ha", "yd2"]
+        case (.area, "ft2"): ["plot", "m2", "yd2", "acre", "ha"]
+        case (.area, "yd2"): ["plot", "m2", "ft2", "acre", "ha"]
+        case (.area, "acre"): ["plot", "m2", "ft2", "ha", "yd2"]
+        case (.area, "ha"): ["plot", "acre", "m2", "ft2", "yd2"]
+        case (.area, "plot"): ["m2", "ft2", "acre", "ha", "yd2"]
+
+        case (.weight, "g"): ["oz", "kg", "lb", "st", "t"]
+        case (.weight, "kg"): ["lb", "st", "g", "oz", "t"]
+        case (.weight, "lb"): ["kg", "oz", "st", "g", "t"]
+        case (.weight, "oz"): ["g", "lb", "kg", "st", "t"]
+        case (.weight, "st"): ["kg", "lb", "g", "oz", "t"]
+        case (.weight, "t"): ["kg", "lb", "st", "g", "oz"]
+
+        case (.volume, "ml"): ["l", "floz", "galus", "galuk", "m3"]
+        case (.volume, "l"): ["ml", "galus", "galuk", "floz", "m3"]
+        case (.volume, "galus"): ["l", "galuk", "ml", "floz", "m3"]
+        case (.volume, "galuk"): ["l", "galus", "ml", "floz", "m3"]
+        case (.volume, "floz"): ["ml", "l", "galus", "galuk", "m3"]
+        case (.volume, "m3"): ["l", "galus", "galuk", "ml", "floz"]
+
+        case (.temperature, "c"): ["f", "k"]
+        case (.temperature, "f"): ["c", "k"]
+        case (.temperature, "k"): ["c", "f"]
+
+        case (.cooking, "cup"): ["ml", "tbsp", "tsp", "floz", "l"]
+        case (.cooking, "tbsp"): ["ml", "tsp", "cup", "floz", "l"]
+        case (.cooking, "tsp"): ["ml", "tbsp", "cup", "floz", "l"]
+        case (.cooking, "ml"): ["cup", "tbsp", "tsp", "floz", "l"]
+        case (.cooking, "l"): ["cup", "ml", "tbsp", "floz", "tsp"]
+        case (.cooking, "floz"): ["ml", "cup", "tbsp", "tsp", "l"]
+
+        default: input.category.units.map(\.id).filter { $0 != input.id }
+        }
+        return order
+    }
+
     // MARK: Dimensions
 
     /// The Foundation dimension for a linear unit. Temperature has none: it

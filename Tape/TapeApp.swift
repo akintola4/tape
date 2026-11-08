@@ -78,6 +78,10 @@ enum LaunchOptions {
     /// in, for stills. It never moves on to the app.
     static var splashFrozenAt: Double? { value(after: "-TapeSplashAt").flatMap(Double.init) }
 
+    /// `-TapeDemoTyping "2.5<<<8"`: after a moment, types this into the amount
+    /// field one key at a time; `<` is delete. For recording the drawing change.
+    static var demoTyping: String? { value(after: "-TapeDemoTyping") }
+
     private static func flag(_ name: String) -> Bool {
         #if DEBUG
         ProcessInfo.processInfo.arguments.contains(name)

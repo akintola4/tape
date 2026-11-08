@@ -25,7 +25,8 @@ It isn't on the App Store. You clone it, open it in Xcode and run it on your own
 ## What it does
 
 - Six categories: length, area, weight, volume, temperature and cooking.
-- Every other unit in the category is listed under the number you type, and updates as you type. Number formatting follows your phone's region.
+- Under the number, a drawing pictures the amount with something you already know the size of: plots of land, 50 kg bags of rice, a person next to a door, cups, a thermometer. It picks the object by size, so a few grams are Maggi cubes and a few tonnes are cars, and it redraws as you type.
+- Every other unit in the category is listed below that, most useful first (plots when you type acres, pounds when you type kilograms, centimetres when you type feet), and updates as you type. Number formatting follows your phone's region.
 - Tap a row to copy it with its unit, for example "668.9 m²". A small toast confirms it, and you get a light tap if haptics are on. Long-press a row to type in that unit instead.
 - Rounding keeps four significant figures without rounding away whole numbers: 668.9 m², 7,200 ft², 0.1653 ac. Float noise like 0.30000000000000004 never reaches the screen. In Settings you can switch to a fixed 0, 2 or 4 decimal places.
 - Length has a feet-and-inches row, so 1.83 m reads as 6′ 0″.
@@ -90,7 +91,7 @@ With a free Apple ID, an app you install from Xcode stops opening after 7 days. 
 xcodebuild test -scheme Tape -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.1'
 ```
 
-The 59 tests in `TapeTests` cover the pure logic in `Shared/`:
+The 90 tests in `TapeTests` cover the pure logic in `Shared/`:
 
 - round trips between every pair of units in every category
 - the exact definitions
@@ -101,6 +102,7 @@ The 59 tests in `TapeTests` cover the pure logic in `Shared/`:
 - the feet-and-inches split, including carrying 11.96″ up to the next foot
 - parsing and cleaning typed input
 - what's remembered between launches
+- which object the drawing uses at each size, the friendly rounding (½, ¼, ¾), how many plots are drawn for each plot size, and the order of the list
 
 Locales are pinned so the tests pass on any machine. Leave out `OS=26.1` if your iPhone 17 Pro simulator runs a newer iOS.
 
@@ -113,14 +115,15 @@ A few are in the scheme, switched off. Turn them on under Product › Scheme ›
 - `-TapeAmount 2.5` sets the amount.
 - `-TapeOpenSettings` opens Settings on launch.
 - `-TapeDemoToast` shows the "Copied" toast for the first row and leaves it up.
+- `-TapeDemoTyping "2.5<<<80"` types into the amount field one key at a time (`<` deletes), for recording the drawing as it changes.
 
 None of them save anything. They only change what the app opens on.
 
 ## Project layout
 
 ```
-Tape/              the app: ConverterView, SettingsView, AppSettings, components from swiftui-registry
-Shared/            the pure logic: UnitsLogic, UnitCatalog, PlotSize, TapePersistence, Theme, Tokens
+Tape/              the app: ConverterView, PictureCard and its shapes, SettingsView, AppSettings
+Shared/            the pure logic: UnitsLogic, UnitCatalog, PictureLogic, PlotSize, TapePersistence, Theme, Tokens
 TapeTests/         Swift Testing suites for Shared/
 Config/            Tape.xcconfig (bundle prefix, team), Info.plist
 scripts/           make-icon.py (draws the app icon), screenshots.sh
