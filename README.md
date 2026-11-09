@@ -124,7 +124,7 @@ Pick the Tape scheme and a simulator (I use iPhone 17 Pro), then press Run. You 
    DEVELOPMENT_TEAM = YOURTEAMID
    ```
 
-   `Config/Tape.xcconfig` includes it if it exists. You can also edit `Tape.xcconfig` directly, or leave the team empty and choose it under Signing & Capabilities. The bundle IDs (`<prefix>.tape`, `<prefix>.tape.widget`) and the App Group (`group.<prefix>.tape`) are all built from `TAPE_BUNDLE_PREFIX`, so that's the only name to change.
+   `Config/Tape.xcconfig` includes it if it exists. Whatever you set there overrides `Tape.xcconfig`, which ships with the placeholder prefix `com.example`. You can also edit `Tape.xcconfig` directly, or leave the team empty and choose it under Signing & Capabilities. The bundle IDs (`<prefix>.tape`, `<prefix>.tape.widget`) and the App Group (`group.<prefix>.tape`) are all built from `TAPE_BUNDLE_PREFIX`, so that's the only name to change.
 2. Plug in your phone, select it and press Run. The first time, go to Settings › General › VPN & Device Management on the phone and trust your developer certificate.
 
 From the command line, let Xcode create the provisioning profiles and register the App Group for you:
@@ -143,7 +143,7 @@ With a free Apple ID, an app you install from Xcode stops opening after 7 days. 
 xcodebuild test -scheme Tape -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.1'
 ```
 
-There are 139 tests in `TapeTests`. 137 run every time; the other 2 render the widget screenshots and only run from `scripts/widget-screenshots.sh`. They cover the pure logic in `Shared/`:
+That runs two test targets. There are 139 tests in `TapeTests`. 137 run every time; the other 2 render the widget screenshots and only run from `scripts/widget-screenshots.sh`. They cover the pure logic in `Shared/`:
 
 - round trips between every pair of units in every category
 - the exact definitions
@@ -158,6 +158,8 @@ There are 139 tests in `TapeTests`. 137 run every time; the other 2 render the w
 - the true minus sign: −0.4 °F, −18 °C, and −40 °C coming out as −40 °F
 - the opening animation's timing, as plain functions of time
 - what each widget size says, the default widget, how widget settings that don't match resolve, the `tape://` link round trip, and copying settings into the App Group
+
+`TapeUITests` has 2 XCTest UI tests that tap through the real app. One checks that `-TapeNoSplash` opens straight on the converter. The other types 1 plot on Area and waits for 668.9 m² and 7,200 ft² to show up in the list. They wait on what's on screen instead of a timer, so a slow Simulator doesn't fail them.
 
 Locales are pinned so the tests pass on any machine. Leave out `OS=26.1` if your iPhone 17 Pro simulator runs a newer iOS.
 
@@ -192,6 +194,7 @@ TapeWidget/        the widget extension: the widget, its timeline and the Edit W
 Shared/            used by both: UnitsLogic, UnitCatalog, PictureLogic, WidgetLogic, the widget views,
                    PlotSize, TapePersistence, Theme, Tokens
 TapeTests/         Swift Testing suites
+TapeUITests/       XCTest UI tests for the converter
 Config/            Tape.xcconfig (bundle prefix, team, App Group), Info.plists, entitlements
 scripts/           screenshots, widget screenshots, splash recording, the icon
 ```
