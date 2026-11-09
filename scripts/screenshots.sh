@@ -14,11 +14,18 @@ OUT=docs/screenshots
 DERIVED=build/DerivedData
 
 xcrun simctl boot "$UDID" 2>/dev/null || true
+xcrun simctl bootstatus "$UDID" >/dev/null
 xcodebuild build -scheme Tape -destination "id=$UDID" -derivedDataPath "$DERIVED" -quiet
 APP="$DERIVED/Build/Products/Debug-iphonesimulator/Tape.app"
 BUNDLE=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Info.plist")
 xcrun simctl install "$UDID" "$APP"
-xcrun simctl status_bar "$UDID" override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4 --wifiBars 3
+# A clean status bar: 9:41, full signal and Wi-Fi, a full battery. The
+# screenshots so far come from a Simulator set to the Nigeria region, which
+# uses a 24-hour clock, so the bar reads "09:41". Keep that for new ones.
+xcrun simctl status_bar "$UDID" override --time 9:41 \
+  --dataNetwork wifi --wifiMode active --wifiBars 3 \
+  --cellularMode active --cellularBars 4 \
+  --batteryState charged --batteryLevel 100
 
 shot() { # appearance, file, launch arguments...
   local appearance=$1 file=$2; shift 2
