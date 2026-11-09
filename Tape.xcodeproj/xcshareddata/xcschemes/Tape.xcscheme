@@ -40,6 +40,17 @@
                ReferencedContainer = "container:Tape.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "7A9E3D000000000000000035"
+               BuildableName = "TapeUITests.xctest"
+               BlueprintName = "TapeUITests"
+               ReferencedContainer = "container:Tape.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

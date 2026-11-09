@@ -190,6 +190,7 @@ struct ConverterView: View {
                     .focused($amountFocused)
                     .lineLimit(1)
                     .accessibilityLabel("Amount in \(unit.name.lowercased())")
+                    .accessibilityIdentifier("amount-field")
                 if category.allowsNegative {
                     Button {
                         amountText = UnitsLogic.toggleSign(amountText)
@@ -289,6 +290,7 @@ struct ConverterView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(row.name), \(row.copyText)")
         .accessibilityHint("Copies the value")
+        .accessibilityIdentifier("result-\(row.id)")
         .contextMenu {
             Button("Copy \(row.copyText)", systemImage: "doc.on.doc") { copy(row) }
             if let target = UnitCatalog.unit(row.id, in: category) {
