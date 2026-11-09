@@ -17,7 +17,7 @@ nonisolated enum TapeShared {
     /// Comes from `TAPE_APP_GROUP` in Config/Tape.xcconfig via each target's
     /// Info.plist, so changing the bundle prefix there is the only edit needed.
     static let appGroupID: String =
-        (Bundle.main.object(forInfoDictionaryKey: "TapeAppGroup") as? String) ?? "group.foster.tape"
+        (Bundle.main.object(forInfoDictionaryKey: "TapeAppGroup") as? String) ?? "group.com.example.tape"
 
     /// The App Group suite. On the Simulator this resolves without portal
     /// provisioning. Falls back to `.standard` only if the suite can't be opened.

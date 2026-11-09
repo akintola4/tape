@@ -11,7 +11,7 @@
 //  The Simulator needs neither.
 //
 
-TAPE_BUNDLE_PREFIX = foster
+TAPE_BUNDLE_PREFIX = com.example
 DEVELOPMENT_TEAM =
 
 // The app and the widget share settings (the plot size, decimals) through this group.
